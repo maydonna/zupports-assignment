@@ -5,11 +5,17 @@ export default defineNuxtConfig({
 
   css: ['~/assets/css/main.css'],
   
-  modules: ['@nuxt/ui'],
+  modules: ['@nuxt/ui', 'v-gsap-nuxt'],
 
   vite: {
     server: {
       allowedHosts: ['zupports-assignment.test']
     }
-  }
+  },
+
+  runtimeConfig: {
+    public: {
+      apiBaseUrl: process.env.API_BASE_URL || 'https://localhost:3000/api',
+    }
+  },
 })
