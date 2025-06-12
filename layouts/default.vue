@@ -8,9 +8,9 @@ useHead({
 })
 </script>
 <template>
-    <UContainer class="mx-auto px-4 py-8">
+    <div class="mx-auto">
         <slot></slot>
-    </UContainer>
+    </div>
 </template>
 <style scoped>
 </style>
