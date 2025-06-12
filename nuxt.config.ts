@@ -11,9 +11,6 @@ export default defineNuxtConfig({
     server: {
       allowedHosts: ['zupports-assignment.test']
     },
-    optimizeDeps: {
-      include: ['@fawmi/vue-google-maps', 'fast-deep-equal'],
-    },
   },
 
   runtimeConfig: {
@@ -24,6 +21,6 @@ export default defineNuxtConfig({
   },
 
   build: {
-    transpile: ['@fawmi/vue-google-maps']
+    transpile: ['vue3-google-map'],
   }
 })
