@@ -1,38 +1,55 @@
 <script setup lang="ts">
-import { GoogleMap, MarkerCluster, AdvancedMarker } from "vue3-google-map";
+import { GoogleMap, AdvancedMarker } from "vue3-google-map";
 import z from "zod";
 
 const config = useRuntimeConfig();
 
 const state = reactive({
   keyword: "Bang Sue",
+  nextPageToken: "",
 });
-
 const schema = z.object({
   keyword: z.string().min(1, "Keyword is required"),
 });
+const selectedRestaurant = ref<Restaurant | null>(null);
 
-const { data, status, error, refresh } = await useFetch(
-  config.public.apiBaseUrl + "/restaurants",
-  {
-    method: "GET",
-    query: {
-      keyword: state.keyword.trim(),
-    },
-    immediate: false,
-  }
-);
-
-const restaurants = computed(() => data.value?.data ?? []);
-const center = computed(() => {
-  const firstRestaurant = restaurants.value[0];
-  return firstRestaurant
-    ? {
-        lat: firstRestaurant.location.latitude,
-        lng: firstRestaurant.location.longitude,
-      }
-    : { lat: 13.7563, lng: 100.5018 }; // Default to Bangkok if no restaurant found
+const { data, refresh, status } = useFetch<RestaurantResponse>("/restaurants", {
+  baseURL: config.public.apiBaseUrl,
+  method: "GET",
+  query: state,
+  watch: false,
+  immediate: false,
+  onResponse: ({ response }) => {
+    if (response.status === 200) {
+      state.nextPageToken = response._data.nextPageToken ?? "";
+    } else {
+      console.error("Failed to fetch restaurants");
+    }
+  },
 });
+
+// Extract the list of restaurants from the fetched data
+const restaurants = computed(() => data.value?.data ?? []);
+
+// Computed property to determine the center of the map based on selected restaurant or first restaurant
+const center = computed(() => {
+  if (selectedRestaurant.value) {
+    return {
+      lat: selectedRestaurant.value.location.latitude,
+      lng: selectedRestaurant.value.location.longitude,
+    };
+  } else {
+    const firstRestaurant = restaurants.value[0];
+    return firstRestaurant
+      ? {
+          lat: firstRestaurant.location.latitude,
+          lng: firstRestaurant.location.longitude,
+        }
+      : { lat: 13.7563, lng: 100.5018 }; // Default to Bangkok if no restaurant found
+  }
+});
+
+// Computed property to generate markers for the map
 const markers = computed(() => {
   return restaurants.value.map((restaurant) => ({
     position: {
@@ -43,12 +60,19 @@ const markers = computed(() => {
 });
 
 const onSubmit = async () => {
+  //clear the next page token and selected restaurant before fetching new data with the new keyword
+  selectedRestaurant.value = null;
+  state.nextPageToken = "";
   await refresh();
 };
 
+const onSelectRestaurant = (restaurant: Restaurant) => {
+  selectedRestaurant.value = restaurant;
+};
+
 onBeforeMount(async () => {
+  // Initialize data with default keyword
   await refresh();
-  console.log(data.value);
 });
 </script>
 <template>
@@ -100,32 +124,55 @@ onBeforeMount(async () => {
           </UForm>
         </div>
         <!-- Restaurant List -->
-        <div class="mt-8 overflow-y-scroll lg:h-[calc(100vh-320px)]">
-          <UCard v-if="restaurants && restaurants.length > 0">
-            <h2 class="text-lg font-semibold mb-4">Search Results</h2>
-            <ul class="space-y-4">
-              <li
-                v-for="restaurant in restaurants"
-                :key="restaurant.id"
-                class="border-b pb-2"
+        <div
+          class="mt-8 overflow-y-scroll lg:h-[calc(100vh-320px)] hidden-scrollbar"
+        >
+          <ul>
+            <li v-if="status === 'pending'" class="text-center">
+              <UIcon
+                name="i-lucide-loader-circle"
+                class="text-primary shrink-0 w-10 h-10 animate-spin animate-infinite animate-ease-in-out"
+              />
+            </li>
+            <li
+              v-else-if="restaurants.length === 0"
+              class="text-center text-gray-500"
+            >
+              No restaurants found
+            </li>
+            <li
+              v-else
+              v-for="restaurant in restaurants"
+              :key="restaurant.id"
+              class="mb-4"
+            >
+              <RestaurantCard
+                :model-value="restaurant"
+                class="hover:cursor-pointer"
+                @click="onSelectRestaurant(restaurant)"
+              />
+            </li>
+            <li
+              v-if="state.nextPageToken && status !== 'pending'"
+              class="mt-4 text-center"
+            >
+              <UButton
+                icon="i-lucide-refresh-cw"
+                color="neutral"
+                variant="ghost"
+                :ui="{
+                  base: 'hover:cursor-pointer',
+                  leadingIcon: 'text-primary',
+                }"
+                @click="refresh()"
               >
-                <h3 class="text-md font-bold">
-                  {{ restaurant.displayName.text }}
-                </h3>
-                <p class="text-sm text-gray-600">
-                  {{ restaurant.formattedAddress }}
-                </p>
-              </li>
-            </ul>
-          </UCard>
-          <UCard v-else-if="status === 'pending'" class="p-4">
-            <p>Loading...</p>
-          </UCard>
-          <UCard v-else-if="error" class="p-4 bg-red-100 text-red-800">
-            <p>Error: {{ error.message }}</p>
-          </UCard>
+                Find More
+              </UButton>
+            </li>
+          </ul>
         </div>
       </UContainer>
+      <!-- Google Map -->
       <GoogleMap
         :api-key="config.public.googleMapsApiKey"
         :map-id="config.public.googleMapsMapId"
